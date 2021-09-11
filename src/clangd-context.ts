@@ -1,3 +1,4 @@
+import { fstat, realpathSync } from 'fs';
 import * as vscode from 'vscode';
 import * as vscodelc from 'vscode-languageclient/node';
 
@@ -108,7 +109,7 @@ export class ClangdContext implements vscode.Disposable {
       middleware: {
         provideCompletionItem: async (document, position, context, token,
                                       next) => {
-          let list = await next(document, position, context, token);
+          let list = await next(document,position, context, token);
           if (!config.get<boolean>('serverCompletionRanking'))
             return list;
           let items = (Array.isArray(list) ? list : list!.items).map(item => {
@@ -117,9 +118,42 @@ export class ClangdContext implements vscode.Disposable {
                 new vscode.Range((item.range as vscode.Range).start, position))
             if (prefix)
             item.filterText = prefix + '_' + item.filterText;
+            let insertText : vscode.SnippetString | string | undefined = item.insertText;
+            if(insertText instanceof vscode.SnippetString) {
+              let pattern = RegExp(/:(\(.*?\))\(.*?\)/);
+              let returnValue: RegExpExecArray | null = null;
+              if(returnValue = pattern.exec(insertText.value)) {
+                insertText.value = returnValue[1] + insertText.value.replace(returnValue[1],'');
+                item.insertText = insertText;
+              }
+            }
             return item;
           })
           return new vscode.CompletionList(items, /*isIncomplete=*/ true);
+        },
+        provideDefinition: async (document, position, token, provideDefinition) => {
+          let result = await provideDefinition(document,position, token);
+          if(Array.isArray(result) && result.length > 0) {
+            let list : vscode.Location[] | vscode.LocationLink[] = result;
+            let item = list[0];
+            if(item instanceof vscode.Location) {
+              item.uri = item.uri.with({ path: realpathSync(item.uri.path) });
+              return item;
+            } else {
+
+            }
+          }
+          return result;
+        },
+        provideDocumentLinks: async(document, token, provideDocumentLinks) => {
+          let result = await provideDocumentLinks(document, token);
+          if(Array.isArray(result) && result.length > 0) {
+            result = result.map(item => {
+              item.target = item.target?.with({ path: realpathSync(item?.target.path) })
+              return item;
+            })
+          }
+          return result;
         },
         // VSCode applies fuzzy match only on the symbol name, thus it throws
         // away all results if query token is a prefix qualified name.

@@ -2,7 +2,7 @@
     "name": "vscode-clangd",
     "displayName": "clangd",
     "description": "C and C++ completion, navigation, and insights",
-    "version": "0.1.13",
+    "version": "0.1.13-bugfix",
     "publisher": "llvm-vs-code-extensions",
     "license": "MIT",
     "homepage": "https://clangd.llvm.org/",
@@ -322,24 +322,24 @@
             ]
         },
         "colors": [
-          {
-            "id": "clangd.inlayHints.foreground",
-            "description": "Foreground color of inlay hints",
-            "defaults": {
-              "dark": "#A0A0A0F0",
-              "light": "#747474",
-              "highContrast": "#BEBEBE"
+            {
+                "id": "clangd.inlayHints.foreground",
+                "description": "Foreground color of inlay hints",
+                "defaults": {
+                    "dark": "#A0A0A0F0",
+                    "light": "#747474",
+                    "highContrast": "#BEBEBE"
+                }
+            },
+            {
+                "id": "clangd.inlayHints.background",
+                "description": "Background color of inlay hints",
+                "defaults": {
+                    "dark": "#11223300",
+                    "light": "#11223300",
+                    "highContrast": "#11223300"
+                }
             }
-          },
-          {
-            "id": "clangd.inlayHints.background",
-            "description": "Background color of inlay hints",
-            "defaults": {
-              "dark": "#11223300",
-              "light": "#11223300",
-              "highContrast": "#11223300"
-            }
-          }
         ]
     }
 }

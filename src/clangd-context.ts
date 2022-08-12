@@ -1,4 +1,5 @@
-import { fstat, realpathSync } from 'fs';
+import { existsSync,readFileSync,  watchFile } from 'fs';
+import { basename} from 'path'
 import * as vscode from 'vscode';
 import * as vscodelc from 'vscode-languageclient/node';
 
@@ -58,7 +59,7 @@ class EnableEditsNearCursorFeature implements vscodelc.StaticFeature {
 export class ClangdContext implements vscode.Disposable {
   subscriptions: vscode.Disposable[] = [];
   client!: ClangdLanguageClient;
-
+  headerMap: Map<string,string> | undefined;
   async activate(globalStoragePath: string, outputChannel: vscode.OutputChannel,
                  workspaceState: vscode.Memento) {
     const clangdPath =
@@ -78,6 +79,17 @@ export class ClangdContext implements vscode.Disposable {
       clangd.options = {env: {...process.env, ...trace}};
     }
     const serverOptions: vscodelc.ServerOptions = clangd;
+    let workspace : string | undefined = this.getDocumentWorkspaceFolder();
+    if(workspace !== undefined) {
+        let headerMapPath = workspace.concat("/.vscode/completion_map.json"); 
+        this.headerMap = new Map<string,string>()
+        this.refreshHeaderMap();
+        watchFile(headerMapPath,{                    // （可选）
+          persistent: true,  // 程序执行完后，当前进程是否挂住，默认为 true（挂住）
+          interval: 5000,     // 每个多久检测一次，默认值 5000 ms
+        }, 
+        this.refreshHeaderMap)
+    }
 
     const clientOptions: vscodelc.LanguageClientOptions = {
       // Register the server for c-family and cuda files.
@@ -135,7 +147,26 @@ export class ClangdContext implements vscode.Disposable {
             let list : vscode.Location[] | vscode.LocationLink[] = result;
             let item = list[0];
             if(item instanceof vscode.Location) {
-              item.uri = item.uri.with({ path: realpathSync(item.uri.path) });
+              if (this.headerMap !== undefined && item.uri.path !== undefined) {
+                let filename = basename(item.uri.path)
+                if (this.headerMap.has(filename)) {
+                  let resolvePath :string | undefined = this.headerMap.get(filename);
+                  if(resolvePath !== undefined && existsSync(resolvePath)){
+                    item.uri = item.uri?.with({ path:  resolvePath});
+                  }
+                }
+                let workspace: string | undefined = this.getDocumentWorkspaceFolder();
+                if (workspace !== undefined && this.headerMap.has(workspace)) {
+                  let removeKey: string | undefined = this.headerMap.get(workspace);
+                  if (removeKey !== undefined && item.uri.path.includes(removeKey)) {
+                    let relativePath = item.uri.path.replace(workspace, "").replace(removeKey, "");
+                    let resolvePath: string = workspace + relativePath;
+                    if (resolvePath !== undefined && existsSync(resolvePath)) {
+                      item.uri = item.uri?.with({ path: resolvePath });
+                    }
+                  }
+                }
+              } 
               return item;
             } else {
 
@@ -147,7 +178,26 @@ export class ClangdContext implements vscode.Disposable {
           let result = await provideDocumentLinks(document, token);
           if(Array.isArray(result) && result.length > 0) {
             result = result.map(item => {
-              item.target = item.target?.with({ path: realpathSync(item?.target.path) })
+              if (this.headerMap !== undefined && item.target?.path !== undefined) {
+                let filename = basename(item.target.path)
+                if (this.headerMap.has(filename)) {
+                  let resolvePath: string | undefined = this.headerMap.get(filename);
+                  if (resolvePath !== undefined && existsSync(resolvePath)) {
+                    item.target = item.target?.with({ path: resolvePath })
+                  }
+                }
+                let workspace: string | undefined = this.getDocumentWorkspaceFolder();
+                if (workspace !== undefined && this.headerMap.has(workspace)) {
+                  let removeKey: string | undefined = this.headerMap.get(workspace);
+                  if (removeKey !== undefined && item.target.path.includes(removeKey)) {
+                    let relativePath = item.target.path.replace(workspace, "").replace(removeKey, "");
+                    let resolvePath: string = workspace + relativePath;
+                    if (resolvePath !== undefined && existsSync(resolvePath)) {
+                      item.target = item.target?.with({ path: resolvePath });
+                    }
+                  }
+                }
+              } 
               return item;
             })
           }
@@ -201,6 +251,27 @@ export class ClangdContext implements vscode.Disposable {
     return vscode.window.visibleTextEditors.filter(
         (e) => isClangdDocument(e.document));
   }
+  refreshHeaderMap() {
+    let workspace : string | undefined = this.getDocumentWorkspaceFolder();
+    if(workspace !== undefined) {
+        let headerMapPath = workspace.concat("/.vscode/completion_map.json"); 
+        if(existsSync(headerMapPath)) {
+          let headerMap = JSON.parse(readFileSync(headerMapPath,"utf-8"));
+          for (const key in headerMap) {
+            this.headerMap?.set(key,headerMap[key])
+          }
+        }
+    }
+  }
+  getDocumentWorkspaceFolder(): string | undefined {
+    let folders : readonly vscode.WorkspaceFolder[] | undefined =  vscode.workspace.workspaceFolders;
+    if(folders !== undefined) {
+        let folder:vscode.WorkspaceFolder = folders[0];
+        return folder.uri.fsPath;
+    } else {
+        return undefined;
+    }
+}
 
   dispose() {
     this.subscriptions.forEach((d) => { d.dispose(); });

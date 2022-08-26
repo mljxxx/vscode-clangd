@@ -23,7 +23,11 @@ export async function activate(context: vscode.ExtensionContext) {
         await clangdContext.activate(context.globalStoragePath, outputChannel,
                                      context.workspaceState);
       }));
-
+  let workspaceFolder: string | undefined = getDocumentWorkspaceFolder();
+  clangdContext.completionPrefixMapPath = vscode.workspace.getConfiguration("clangd").get("completionPrefixMapPath", "");
+  if (workspaceFolder !== undefined) {
+    clangdContext.completionPrefixMapPath = clangdContext.completionPrefixMapPath.replace('${workspaceFolder}', workspaceFolder);
+  }
   await clangdContext.activate(context.globalStoragePath, outputChannel,
                                context.workspaceState);
 
@@ -58,5 +62,15 @@ export async function activate(context: vscode.ExtensionContext) {
         }
       }
     }, 5000);
+  }
+}
+
+function getDocumentWorkspaceFolder(): string | undefined {
+  let folders: readonly vscode.WorkspaceFolder[] | undefined = vscode.workspace.workspaceFolders;
+  if (folders !== undefined) {
+    let folder: vscode.WorkspaceFolder = folders[0];
+    return folder.uri.fsPath;
+  } else {
+    return undefined;
   }
 }

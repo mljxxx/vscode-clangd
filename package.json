@@ -150,6 +150,10 @@
                     "type": "boolean",
                     "default": true,
                     "description": "Warn about conflicting extensions and suggest disabling them."
+                },
+                "clangd.completionPrefixMapPath": {
+                    "type":"string",
+                    "default":""
                 }
             }
         },
